@@ -73,6 +73,98 @@ function scaffoldCourse(semester, course) {
   writeIfMissing(join(dir, 'NOTES', '.gitkeep'), '');
 }
 
+function listCourses(semester) {
+  const dir = semesterDir(semester);
+  if (!existsSync(dir)) fail(`semester "${semester}" not found`);
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && !d.name.startsWith('.'))
+    .map((d) => d.name);
+}
+
+// Leading integer of a file name: "1.pdf" -> 1, "3. Intro to X.md" -> 3, "a.pdf" -> null.
+function leadingNum(name) {
+  const m = name.match(/^(\d+)/);
+  return m ? Number(m[1]) : null;
+}
+
+function realFiles(dir) {
+  return existsSync(dir)
+    ? readdirSync(dir).filter((f) => f !== '.gitkeep' && !f.startsWith('.'))
+    : [];
+}
+
+// Compare LECTURES/ vs NOTES/ by leading number.
+function notesStatus(semester, course) {
+  const dir = courseDir(semester, course);
+  if (!existsSync(dir)) fail(`course not found: ${semester}/${course}`);
+  const lectures = realFiles(join(dir, 'LECTURES')).sort(
+    (a, b) => (leadingNum(a) ?? Infinity) - (leadingNum(b) ?? Infinity));
+  const notes = realFiles(join(dir, 'NOTES')).sort(
+    (a, b) => (leadingNum(a) ?? Infinity) - (leadingNum(b) ?? Infinity));
+  const noteNums = new Set(notes.map(leadingNum).filter((n) => n !== null));
+  const left = lectures.filter((f) => {
+    const n = leadingNum(f);
+    return n === null ? !notes.includes(f) : !noteNums.has(n);
+  });
+  return { dir, lectures, notes, left };
+}
+
+function printNotes(semester, course, { leftOnly }) {
+  const { dir, lectures, notes, left } = notesStatus(semester, course);
+  if (leftOnly) {
+    if (left.length === 0) {
+      ok(`No notes left — all ${lectures.length} lecture(s) have notes.`);
+      return;
+    }
+    console.log(`Notes left for "${course}" (${left.length} of ${lectures.length} lecture(s) without notes):`);
+    for (const f of left) console.log(`  • ${f}  →  ${join(dir, 'NOTES')}`);
+    return;
+  }
+  console.log(`Notes for "${course}" (${notes.length}/${lectures.length} lecture(s) covered):`);
+  if (notes.length === 0) {
+    console.log('  (none yet — create one in NOTES/ named "<lecture number>. <Title>.md")');
+    if (left.length > 0) console.log(`  left: ${left.join(', ')}`);
+    return;
+  }
+  for (const f of notes) console.log(`  • ${f}`);
+}
+
+// Interactive: pick one item from a numbered list.
+async function promptPick(rl, title, items, emptyMsg) {
+  if (items.length === 0) fail(emptyMsg);
+  if (items.length === 1) {
+    console.log(`${title} → ${items[0]} (only option)`);
+    return items[0];
+  }
+  console.log(title + ':');
+  items.forEach((it, i) => console.log(`  ${i + 1}) ${it}`));
+  const pick = (await rl.question('\nEnter number: ')).trim();
+  const choice = Number(pick);
+  if (!Number.isInteger(choice) || choice < 1 || choice > items.length) {
+    fail(`invalid selection "${pick}"`);
+  }
+  return items[choice - 1];
+}
+
+async function notesCommand(args) {
+  const leftOnly = args.includes('--left');
+  const pos = args.filter((a) => a !== '--left');
+  let semester = pos[0];
+  let course = pos[1];
+
+  let rl = null;
+  try {
+    if (!semester || !course) {
+      rl = createInterface({ input: process.stdin, output: process.stdout });
+      if (!semester) semester = await promptPick(rl, 'Select a semester', listSemesters(), 'no semesters found — run: edu init <SEMESTER>');
+      if (!course) course = await promptPick(rl, `Select a course in "${semester}"`, listCourses(semester), `no courses in "${semester}" — run: edu course create`);
+    }
+    printNotes(semester, course, { leftOnly });
+  } finally {
+    rl?.close();
+  }
+}
+
 // Interactive flow: pick a semester from a numbered list, then enter the course name.
 async function createCourseInteractive() {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -129,6 +221,11 @@ const commands = {
       await createCourseInteractive();
       return;
     }
+    // "edu course notes [SEMESTER] [Course] [--left]" → list notes / remaining lectures.
+    if (args[0] === 'notes') {
+      await notesCommand(args.slice(1));
+      return;
+    }
     const [semester, course] = args;
     if (!course) {
       fail('usage: edu course <SEMESTER> "<Course Name>"   or   edu course create');
@@ -152,11 +249,7 @@ const commands = {
     const [_, semester] = args;
     if (what === 'courses') {
       if (!semester) fail('usage: edu list courses <SEMESTER>');
-      const dir = semesterDir(semester);
-      if (!existsSync(dir)) fail(`semester "${semester}" not found`);
-      const courses = readdirSync(dir, { withFileTypes: true })
-        .filter((d) => d.isDirectory() && !d.name.startsWith('.'))
-        .map((d) => d.name);
+      const courses = listCourses(semester);
       console.log(`Courses in ${semester}:`);
       for (const c of courses) console.log(`  ${c}`);
       return;
@@ -179,6 +272,8 @@ Usage:
   edu init <SEMESTER>                    Create a semester folder (e.g. FALL-2026)
   edu course <SEMESTER> "<Course Name>"  Create a course with LECTURES/ and NOTES/
   edu course create                      Interactive: pick a semester, then name the course
+  edu course notes [SEMESTER] [Course]   List notes for a course (interactive if omitted)
+  edu course notes --left                Show lectures still missing a note
   edu list semesters                     List all semesters
   edu list courses <SEMESTER>            List courses in a semester
   edu open <SEMESTER> [Course Name]      Open folder in Finder

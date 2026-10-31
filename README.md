@@ -8,6 +8,8 @@ Zero-dependency CLI (Node.js) at the repo root for scaffolding semesters and cou
 ./edu init <SEMESTER>                     # create a semester folder
 ./edu course create                       # interactive: pick a semester, then name the course
 ./edu course <SEMESTER> "<Course Name>"   # create a course with LECTURES/ and NOTES/
+./edu course notes [SEMESTER] [Course]     # list notes for a course (interactive if omitted)
+./edu course notes --left                  # show lectures still missing a note
 ./edu list semesters                      # list all semesters
 ./edu list courses <SEMESTER>             # list courses in a semester
 ./edu open <SEMESTER> [Course Name]       # open folder in Finder
