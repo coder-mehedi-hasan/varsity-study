@@ -13,3 +13,10 @@ This repo organizes study material as `Semester/Course` folders.
   - `./edu course <SEMESTER> "<Course Name>"`
   - `./edu list semesters` / `./edu list courses <SEMESTER>`
   - See `README.md` for full usage.
+
+## Response style (always on)
+
+Shape every reply with the `i-have-adhd` skill (`.agents/skills/i-have-adhd`).
+For each answer, apply its output rules: lead with the next action, number multi-step
+work, restate progress each turn, give concrete time estimates, make completed work
+visible, cap lists to 5 items, and skip preamble and closing pleasantries.
