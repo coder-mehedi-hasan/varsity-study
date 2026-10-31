@@ -1,0 +1,3 @@
+#!/bin/sh
+# edu — semester & course scaffolding CLI. Run from repo root: ./edu <command>
+exec node "$(dirname "$0")/edu.mjs" "$@"
