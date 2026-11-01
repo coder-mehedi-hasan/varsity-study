@@ -1,4 +1,4 @@
-# education
+# Study Helper
 
 ## `edu` CLI
 
